@@ -2,6 +2,7 @@ from typing import Mapping
 
 import numpy as np
 import xarray as xr
+import xarray.testing as xrt
 from xarray.core.indexes import Index
 import pytest
 
@@ -270,7 +271,7 @@ class TestCombineUsingIndexes:
 
         assert combined_vds.xindexes["time"].to_pandas_index().is_monotonic_increasing
 
-
+# TODO: This should probablbe be merged into the test class?
 pytest.importorskip("s3fs")
 @pytest.mark.xfail(reason="currently should xfail for None filetype and None indexes.",run=False)
 @pytest.mark.parametrize("filetype", ['netcdf4', None], ids=["netcdf4 filetype", "None filetype"])
@@ -278,3 +279,19 @@ pytest.importorskip("s3fs")
 def test_anon_read_s3(filetype, indexes):
     fpath = 's3://nex-gddp-cmip6/NEX-GDDP-CMIP6/CESM2/historical/r4i1p1f1/pr/pr_day_CESM2_historical_r4i1p1f1_gn_2010.nc'
     assert open_virtual_dataset(fpath,filetype=filetype,indexes=indexes,reader_options={'storage_options': {'anon': True}})
+
+class TestLoadVirtualDataset:
+    def test_loadable_variables(self, netcdf4_file):
+        vars_to_load = ['air', 'time']
+        vds = open_virtual_dataset(netcdf4_file, loadable_variables=vars_to_load)
+
+        for name in vds.variables:
+            if name in vars_to_load:
+                assert isinstance(vds[name].data, np.ndarray), name
+            else:
+                assert isinstance(vds[name].data, ManifestArray), name
+
+        full_ds = xr.open_dataset(netcdf4_file)
+        for name in full_ds.variables:
+            if name in vars_to_load:
+                xrt.assert_identical(vds.variables[name], full_ds.variables[name])
